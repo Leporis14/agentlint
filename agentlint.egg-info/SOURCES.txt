@@ -1,0 +1,8 @@
+pyproject.toml
+agentlint/main.py
+agentlint.egg-info/PKG-INFO
+agentlint.egg-info/SOURCES.txt
+agentlint.egg-info/dependency_links.txt
+agentlint.egg-info/entry_points.txt
+agentlint.egg-info/requires.txt
+agentlint.egg-info/top_level.txt
