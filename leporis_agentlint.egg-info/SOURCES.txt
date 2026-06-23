@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+agentlint/main.py
+leporis_agentlint.egg-info/PKG-INFO
+leporis_agentlint.egg-info/SOURCES.txt
+leporis_agentlint.egg-info/dependency_links.txt
+leporis_agentlint.egg-info/entry_points.txt
+leporis_agentlint.egg-info/requires.txt
+leporis_agentlint.egg-info/top_level.txt

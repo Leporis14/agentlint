@@ -1,5 +1,5 @@
 [project]
-name = "agentlint"
+name = "leporis-agentlint"
 version = "0.1.0"
 description = "Audit MCP server configurations for security risks"
 requires-python = ">=3.10"
