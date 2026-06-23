@@ -4,7 +4,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
@@ -217,6 +217,36 @@ def score_bar(score: int) -> Text:
     return Text("".join(bar_chars), style=color)
 
 
+def _load_and_audit(config_file: Path) -> dict[str, dict]:
+    """Parse *config_file* and audit every server.  Returns {name: {findings, score}}."""
+    try:
+        raw = json.loads(config_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        console.print(f"[red]Error:[/red] invalid JSON in {config_file} — {exc}")
+        raise typer.Exit(code=1)
+
+    servers = raw.get("mcpServers") or raw
+    if not isinstance(servers, dict):
+        console.print(
+            f"[red]Error:[/red] expected object at 'mcpServers' key or top level; "
+            f"got {type(servers).__name__}."
+        )
+        raise typer.Exit(code=1)
+
+    results: dict[str, dict] = {}
+    for srv_name, srv_config in servers.items():
+        if not isinstance(srv_config, dict):
+            results[srv_name] = {
+                "findings": [Finding("warning", f"Skipped: config is {type(srv_config).__name__}, not an object.")],
+                "score": 1,
+            }
+            continue
+        findings, score = audit_server(srv_name, srv_config)
+        results[srv_name] = {"findings": findings, "score": score}
+
+    return results
+
+
 @app.command(name="scan")
 def scan_cmd(
     config_file: Annotated[
@@ -236,32 +266,7 @@ def scan_cmd(
 ) -> None:
     """Scan an MCP server configuration file for security risks."""
 
-    # Parse ------------------------------------------------------------------
-    try:
-        raw = json.loads(config_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        console.print(f"[red]Error:[/red] invalid JSON in {config_file} — {exc}")
-        raise typer.Exit(code=1)
-
-    servers = raw.get("mcpServers") or raw
-    if not isinstance(servers, dict):
-        console.print(
-            f"[red]Error:[/red] expected object at 'mcpServers' key or top level; "
-            f"got {type(servers).__name__}."
-        )
-        raise typer.Exit(code=1)
-
-    # Audit every server -----------------------------------------------------
-    results: dict[str, dict] = {}
-    for srv_name, srv_config in servers.items():
-        if not isinstance(srv_config, dict):
-            results[srv_name] = {
-                "findings": [Finding("warning", f"Skipped: config is {type(srv_config).__name__}, not an object.")],
-                "score": 1,
-            }
-            continue
-        findings, score = audit_server(srv_name, srv_config)
-        results[srv_name] = {"findings": findings, "score": score}
+    results = _load_and_audit(config_file)
 
     # JSON output ------------------------------------------------------------
     if json_output:
@@ -338,6 +343,69 @@ def scan_cmd(
             s = data["score"]
             risk_table.add_row(name, score_bar(s) + Text(f" {s}/10"))
         console.print(risk_table)
+
+
+# ---------------------------------------------------------------------------
+# CI command (plain-text, exit-code driven)
+# ---------------------------------------------------------------------------
+
+_CI_CONFIG_CANDIDATES = [
+    Path("claude_desktop_config.json"),
+    Path(".mcp.json"),
+    Path("mcp.json"),
+]
+
+
+def _discover_config() -> Path:
+    """Find the first existing MCP config file in the current directory."""
+    for candidate in _CI_CONFIG_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    names = ", ".join(str(p) for p in _CI_CONFIG_CANDIDATES)
+    print(f"agentlint: error: no config file found (looked for: {names})", file=__import__("sys").stderr)
+    raise typer.Exit(code=2)
+
+
+@app.command(name="ci")
+def ci_cmd(
+    config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--config", "-c",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Path to config file. Auto-detected if omitted.",
+        ),
+    ] = None,
+) -> None:
+    """Run agentlint in CI mode.  Exits non-zero when any server scores 7 or above."""
+
+    config_path = config if config is not None else _discover_config()
+    results = _load_and_audit(config_path)
+
+    total = len(results)
+    if total == 0:
+        print("agentlint: no servers found. Build passed.")
+        raise typer.Exit(code=0)
+
+    criticals = sum(
+        1 for d in results.values() for f in d["findings"] if f.level == "critical"
+    )
+    max_score = max(d["score"] for d in results.values())
+    failed = max_score >= 7
+
+    # One-line summary
+    msg = f"agentlint: {total} server{'s' if total != 1 else ''} scanned, "
+    msg += f"{criticals} critical violation{'s' if criticals != 1 else ''}"
+    if failed:
+        over = sum(1 for d in results.values() if d["score"] >= 7)
+        msg += f", {over} server{'s' if over != 1 else ''} scored >= 7"
+    msg += ". Build failed." if failed else ". Build passed."
+
+    print(msg)
+    raise typer.Exit(code=1 if failed else 0)
 
 
 # ---------------------------------------------------------------------------
