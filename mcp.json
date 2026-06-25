@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "safe-weather-server": {
+      "command": "node",
+      "args": ["weather-server.js"],
+      "env": {
+        "API_URL": "https://api.weather.com/v1"
+      }
+    }
+  }
+}
