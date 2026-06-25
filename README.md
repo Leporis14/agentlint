@@ -2,14 +2,14 @@
 
 > A security scanner for MCP server configs — catch dangerous permissions, hardcoded secrets, and missing guardrails before you ship.
 
-[![PyPI version](https://img.shields.io/pypi/v/agentlint)](https://pypi.org/project/agentlint/)
+[![PyPI version](https://img.shields.io/pypi/v/leporis-agentlint)](https://pypi.org/project/leporis-agentlint/)
 [![License](https://img.shields.io/github/license/Leporis14/agentlint)](https://github.com/Leporis14/agentlint/blob/main/LICENSE)
 [![Stars](https://img.shields.io/github/stars/Leporis14/agentlint)](https://github.com/Leporis14/agentlint)
 
 ## Install
 
 ```bash
-pip install agentlint
+pip install leporis-agentlint
 ```
 
 ## Usage
@@ -110,7 +110,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install agentlint
-        run: pip install agentlint
+        run: pip install leporis-agentlint
       - name: Run agentlint CI check
         run: agentlint ci
 ```
