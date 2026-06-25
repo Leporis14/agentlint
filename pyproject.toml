@@ -1,9 +1,13 @@
 [project]
 name = "leporis-agentlint"
-version = "0.1.0"
+version = "0.1.1"
 description = "Audit MCP server configurations for security risks"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
     "typer>=0.12",
     "rich>=13.0",
