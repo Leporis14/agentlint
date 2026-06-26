@@ -42,8 +42,8 @@ SECRET_VALUE_PATTERNS = [
         r"gh[pousr]_[A-Za-z0-9_]{20,}",
         # Slack tokens
         r"xox[bp][a-z]?-[\d]+-[A-Za-z0-9-]+",
-        # Generic hex/base64-looking tokens (allow hyphens, moderate confidence)
-        r"\b[A-Za-z0-9+/=-]{32,}\b",
+        # Generic hex/base64-looking tokens (no / — avoids matching filesystem paths)
+        r"\b[A-Za-z0-9_=-]{32,}\b",
         # JWT-ish
         r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
         # AWS keys
@@ -147,6 +147,17 @@ def audit_server(name: str, config: dict) -> tuple[list[Finding], int]:
                 f"Possible secret: env var '{key}' value looks like a credential.",
             ))
             score += 2
+
+    # 1b. Secrets in CLI args --------------------------------------------------
+    args = config.get("args") or []
+    for arg in args:
+        arg_s = str(arg)
+        if secret_key_looks_hardcoded(arg_s):
+            findings.append(Finding(
+                "critical",
+                f"Secret in CLI args: value '{arg_s}' leaks into shell history and process lists.",
+            ))
+            score += 4
 
     # 2. Overly broad filesystem access --------------------------------------
     args = config.get("args") or []
