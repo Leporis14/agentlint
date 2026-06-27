@@ -1,6 +1,6 @@
 # agentlint
 
-> A security scanner for MCP server configs — catch dangerous permissions, hardcoded secrets, and missing guardrails before you ship.
+> Catches dangerous MCP config regressions on every PR before they reach production.
 
 [![PyPI version](https://img.shields.io/pypi/v/leporis-agentlint)](https://pypi.org/project/leporis-agentlint/)
 [![License](https://img.shields.io/pypi/l/leporis-agentlint?v=2)](https://pypi.org/project/leporis-agentlint/)
@@ -10,6 +10,41 @@
 
 ```bash
 pip install leporis-agentlint
+```
+
+## CI / GitHub Actions
+
+```bash
+$ agentlint ci
+```
+
+```
+agentlint: 4 servers scanned, 3 critical violations, 2 servers scored >= 7. Build failed.
+```
+
+Exits `0` if clean, `1` if any server scores ≥ 7. Auto-discovers config from `claude_desktop_config.json`, `.mcp.json`, or `mcp.json` in the repo root.
+
+```yaml
+# .github/workflows/agentlint.yml
+name: agentlint
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  agentlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install agentlint
+        run: pip install leporis-agentlint
+      - name: Run agentlint CI check
+        run: agentlint ci
 ```
 
 ## Usage
@@ -80,40 +115,7 @@ $ agentlint scan mcp.json --json
 
 Each server gets a risk score **1–10**. Green (≤3), yellow (4–6), red (7+).
 
-## CI / GitHub Actions
 
-```bash
-$ agentlint ci
-```
-
-```
-agentlint: 4 servers scanned, 3 critical violations, 2 servers scored >= 7. Build failed.
-```
-
-Exits `0` if clean, `1` if any server scores ≥ 7. Auto-discovers config from `claude_desktop_config.json`, `.mcp.json`, or `mcp.json` in the repo root.
-
-```yaml
-# .github/workflows/agentlint.yml
-name: agentlint
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
-
-jobs:
-  agentlint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install agentlint
-        run: pip install leporis-agentlint
-      - name: Run agentlint CI check
-        run: agentlint ci
-```
 
 ## Why
 

@@ -77,6 +77,15 @@ AUTH_KEYWORDS = {
     "salesforce", "hubspot", "zendesk", "figma",
 }
 
+EXFIL_KEYWORDS = {
+    "upload", "email", "webhook", "smtp", "send_mail", "http_post",
+    "browser_submit", "s3_put", "ftp", "curl", "wget",
+}
+
+SHELL_NET_KEYWORDS = {
+    "bash", "sh", "curl", "wget", "python", "node", "exec", "eval", "nc", "ncat",
+}
+
 
 def is_broad_path(arg: str) -> bool:
     """Return True if *arg* looks like overly broad filesystem access."""
@@ -194,6 +203,72 @@ def audit_server(name: str, config: dict) -> tuple[list[Finding], int]:
             "No approval gate: server is missing 'requireApproval' or 'humanInLoop' field.",
         ))
         score += 2
+
+    # 5. Exfiltration-capable tools --------------------------------------------
+    # Collect all scannable text: server name, command, and args
+    search_texts: list[str] = [name]
+    for field in ("command", "args"):
+        val = config.get(field)
+        if isinstance(val, list):
+            search_texts.extend(str(v) for v in val)
+        elif isinstance(val, str):
+            search_texts.append(val)
+
+    search_blob = " ".join(search_texts).lower()
+    matched = [kw for kw in EXFIL_KEYWORDS if kw in search_blob]
+
+    for kw in matched:
+        if has_approval:
+            findings.append(Finding(
+                "warning",
+                f"Exfiltration-capable tool '{kw}' is present, but protected by an approval gate.",
+            ))
+            score += 1
+        else:
+            findings.append(Finding(
+                "critical",
+                f"Exfiltration-capable tool detected: '{kw}' can silently send data outside the environment — requires an explicit approval gate.",
+            ))
+            score += 4
+
+    # 6. Compound: secret + shell/network = dangerous combo -------------------
+    has_secret_finding = any(
+        "Hardcoded secret" in f.detail or "Secret in CLI args" in f.detail
+        for f in findings
+    )
+    if has_secret_finding:
+        # Normalise runtime keywords — "node" / "python" as the command
+        # interpreter are not inherently shell access, but they ARE
+        # dangerous when they appear in args (e.g. `python -c '...'`).
+        RUNTIME_ONLY = frozenset({"node", "python"})
+
+        cmd = config.get("command", "")
+        cmd_lower = (cmd or "").lower()
+        args = config.get("args") or []
+        if isinstance(args, list):
+            args_lower = " ".join(str(v).lower() for v in args)
+        else:
+            args_lower = ""
+
+        name_lower = name.lower()
+        search_blob = " ".join([name_lower, cmd_lower, args_lower])
+
+        shell_match: str | None = None
+        for kw in SHELL_NET_KEYWORDS:
+            if kw not in search_blob:
+                continue
+            if kw in RUNTIME_ONLY and kw == cmd_lower:
+                # `node` or `python` as the exact command interpreter — skip
+                continue
+            shell_match = kw
+            break
+
+        if shell_match is not None:
+            findings.append(Finding(
+                "critical",
+                "Dangerous combo: server has secret credentials AND shell/network access — high exfiltration risk.",
+            ))
+            score += 5
 
     # Clamp score to 1-10
     score = max(1, min(score, 10))
